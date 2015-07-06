@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.rawgit.com/konvajs/konva/0.9.5/konva.min.js"></script>
+    <meta charset="utf-8">
+    <title>HTTP Access Log Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #F0F0F0;
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+<script>
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+
+    var stage = new Konva.Stage({
+        container: 'container',
+        width: width,
+        height: height
+    });
+
+    var layer = new Konva.Layer();
+
+    var rect = new Konva.Rect({
+        x: stage.getWidth() / 2,
+        y: stage.getHeight() / 2,
+        //sides: 8,
+        //radius: 30,
+        fill: '#BF4E4E',
+        stroke: 'black',
+        strokeWidth: 2,
+        width: 100,
+        height: 25
+    });
+
+    layer.add(rect);
+    stage.add(layer);
+
+    var amplitude = 350;
+    var period = 2000;
+    // in ms
+    var centerX = stage.getWidth() / 2;
+
+    var anim = new Konva.Animation(function(frame) {
+        rect.setX(amplitude * Math.sin(frame.time * 2 * Math.PI / period) + centerX);
+    }, layer);
+
+    anim.start();
+</script>
+
+</body>
+</html>
