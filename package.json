@@ -16,6 +16,11 @@
     "express": "~4.13.0",
     "jade": "~1.11.0",
     "morgan": "~1.6.1",
-    "serve-favicon": "~2.3.0"
+    "serve-favicon": "~2.3.0",
+    "string": "~3.3.0",
+    "app-root-path": "~1.0.0",
+    "byline": "~4.2.1",
+    "line-reader": "0.2.4-a",
+    "express-session": "~1.11.3"
   }
 }
