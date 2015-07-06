@@ -1,0 +1,22 @@
+{
+  "name": "HTTPLogViewer",
+  "version": "0.0.1",
+  "homepage": "https://github.com/Zepx/HTTPLogViewer",
+  "authors": [
+    "Choong Jun Jin <choong.junjin@gmail.com>"
+  ],
+  "description": "A HTTP log visualizer tool",
+  "main": "public/javascripts/main.js",
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "jquery": "~2.1.4",
+    "konva": "~0.9.5"
+  }
+}

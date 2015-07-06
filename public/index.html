@@ -1,57 +1,122 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://cdn.rawgit.com/konvajs/konva/0.9.5/konva.min.js"></script>
-    <meta charset="utf-8">
-    <title>HTTP Access Log Visualizer</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #F0F0F0;
-        }
-    </style>
+   <script src="/bower_components/konva/konva.min.js"></script>
+   <script src="/bower_components/jquery/dist/jquery.min.js"></script>
+   
+   <meta charset="utf-8">
+   <title>HTTP Access Log Visualizer</title>
+   <style>
+      body {
+         margin: 0;
+         padding: 0;
+         overflow: hidden;
+         background-color: #F0F0F0;
+      }
+      
+      #controls {
+         margin: 10px;
+      }
+      
+      .log-control {
+         /*min-width: 200px;*/
+      }
+   </style>
 </head>
 <body>
-<div id="container"></div>
+   <div id="controls">
+      <select name="logfile" class="log-control">
+         <option disabled selected="selected">--Default--</option>
+      </select>
+      <button id="startAutoButton" value="start" style="display: none">Start Auto Play</button>
+      <button id="stopAutoButton" value="stop" style="display: none">Stop Auto Play</button>
+   </div>
+   <div id="container">
+
+   </div>
 <script>
-    var width = window.innerWidth;
-    var height = window.innerHeight;
+   var width = window.innerWidth;
+   var height = window.innerHeight;
 
-    var stage = new Konva.Stage({
-        container: 'container',
-        width: width,
-        height: height
-    });
+   var stage = new Konva.Stage({
+     container: 'container',
+     width: width,
+     height: height
+   });
 
-    var layer = new Konva.Layer();
+   var layer = new Konva.Layer();
 
-    var rect = new Konva.Rect({
-        x: stage.getWidth() / 2,
-        y: stage.getHeight() / 2,
-        //sides: 8,
-        //radius: 30,
-        fill: '#BF4E4E',
-        stroke: 'black',
-        strokeWidth: 2,
-        width: 100,
-        height: 25
-    });
+   var rect = new Konva.Rect({
+     x: stage.getWidth() / 2,
+     y: stage.getHeight() / 2,
+     //sides: 8,
+     //radius: 30,
+     fill: '#BF4E4E',
+     stroke: 'black',
+     strokeWidth: 2,
+     width: 100,
+     height: 25
+   });
 
-    layer.add(rect);
-    stage.add(layer);
+   layer.add(rect);
+   stage.add(layer);
 
-    var amplitude = 350;
-    var period = 2000;
-    // in ms
-    var centerX = stage.getWidth() / 2;
+   var amplitude = 350;
+   var period = 2000;
+   // in ms
+   var centerX = stage.getWidth() / 2;
 
-    var anim = new Konva.Animation(function(frame) {
-        rect.setX(amplitude * Math.sin(frame.time * 2 * Math.PI / period) + centerX);
-    }, layer);
+   var anim = new Konva.Animation(function(frame) {
+     rect.setX(amplitude * Math.sin(frame.time * 2 * Math.PI / period) + centerX);
+   }, layer);
 
-    anim.start();
+   //anim.start();
+   var intervalID;
+   
+   $(document).ready(function() {
+      $.ajax( {
+         url: 'process/filelist',
+      }).done(function(data) {
+         if(data) {
+            data.forEach(function(ele, index) {
+               $ele = $('<option>' + ele + '</option>').val(ele)
+               $('[name=logfile]').append($ele);
+            });
+         }
+      })
+      
+      $('[name=logfile]').on('change', function() {
+         var logfile = $(this).val();
+         
+         $.ajax( {
+            url: 'process/log/' + logfile,
+         }).done(function(data) {
+            if(data.status === true) {
+               $('#startAutoButton').show();
+            }
+         })
+      })
+      
+      $('#startAutoButton').click(function() {
+         $(this).hide();
+         $("#stopAutoButton").show();
+         intervalID = window.setInterval(fetchNextLine, 1000);
+      });
+      
+      $('#stopAutoButton').click(function() {
+         $(this).hide();
+         $("#startAutoButton").show();
+         clearInterval(intervalID);
+      });
+   });
+   
+   function fetchNextLine() {
+      $.ajax( {
+         url: 'process/next'
+      }).done(function(data) {
+         console.log(data);
+      })
+   }
 </script>
 
 </body>
