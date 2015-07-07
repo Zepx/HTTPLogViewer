@@ -3,6 +3,7 @@
 <head>
    <script src="/bower_components/konva/konva.min.js"></script>
    <script src="/bower_components/jquery/dist/jquery.min.js"></script>
+   <script src="/bower_components/randomColor/randomColor.js"></script>
    
    <meta charset="utf-8">
    <title>HTTP Access Log Visualizer</title>
@@ -21,6 +22,20 @@
       .log-control {
          /*min-width: 200px;*/
       }
+      
+      #left-wrapper {
+         margin-left: 10px;
+         width: 50%;
+      }
+      
+      #right-wrapper {
+         width: 50%;
+         margin-right: 10px;
+      }
+      
+      p {
+         margin: 0;
+      }
    </style>
 </head>
 <body>
@@ -31,12 +46,19 @@
       <button id="startAutoButton" value="start" style="display: none">Start Auto Play</button>
       <button id="stopAutoButton" value="stop" style="display: none">Stop Auto Play</button>
    </div>
+   <div id="wrapper">
+      <div id="left-wrapper"></div>
+      <div id="right-wrapper"></div>
+   </div>
    <div id="container">
 
    </div>
 <script>
    var width = window.innerWidth;
    var height = window.innerHeight;
+   var color = randomColor();
+   var y_counter = 0;
+   var y_counter2 = 0;
 
    var stage = new Konva.Stage({
      container: 'container',
@@ -45,21 +67,24 @@
    });
 
    var layer = new Konva.Layer();
+   var urlLayer = new Konva.Layer();
+   var ballLayer = new Konva.Layer();
+   stage.add(urlLayer);
+   stage.add(layer);
+   stage.add(ballLayer);
 
-   var rect = new Konva.Rect({
+   /*var rect = new Konva.Rect({
      x: stage.getWidth() / 2,
      y: stage.getHeight() / 2,
-     //sides: 8,
-     //radius: 30,
      fill: '#BF4E4E',
      stroke: 'black',
      strokeWidth: 2,
      width: 100,
      height: 25
-   });
+   });*/
 
-   layer.add(rect);
-   stage.add(layer);
+   //layer.add(rect);
+   //stage.add(layer);
 
    var amplitude = 350;
    var period = 2000;
@@ -71,7 +96,14 @@
    }, layer);
 
    //anim.start();
+   var MAX_SIZE = 5;
+   var MAX_SIZE2 = 40;
    var intervalID;
+   var mapOfAddress = {};
+   var listOfUrl = [];
+   var listOfUrlNodes = [];
+   var listOfAddress = [];
+   var listOfNodes = [];
    
    $(document).ready(function() {
       $.ajax( {
@@ -100,7 +132,7 @@
       $('#startAutoButton').click(function() {
          $(this).hide();
          $("#stopAutoButton").show();
-         intervalID = window.setInterval(fetchNextLine, 1000);
+         intervalID = window.setInterval(fetchNextLine, 2000);
       });
       
       $('#stopAutoButton').click(function() {
@@ -109,13 +141,170 @@
          clearInterval(intervalID);
       });
    });
-   
+    
    function fetchNextLine() {
       $.ajax( {
-         url: 'process/next'
+         url: 'process/next/25'
       }).done(function(data) {
-         console.log(data);
-      })
+         data.forEach(function(d) {
+            if(d.status === true) {
+               var ip = d.ip;
+               var url = d.request;
+               var x_pos = -1;
+               var y_pos = -1;
+               var x_tar = -1;
+               var y_tar = -1;
+               var randomC = randomColor({luminosity: 'dark'});
+               var ball = null;
+               
+               var nodeIndex = -1;
+               //if(!(ip in mapOfAddress)) {
+               if((nodeIndex = listOfAddress.indexOf(ip)) == -1) {
+                  x_pos = 25;
+                  y_pos = y_counter;
+                  
+                  var node = new Konva.Text({
+                     x: 25,
+                     y: y_pos,
+                     text: ip,
+                     fontSize: 13,
+                     fill: randomC
+                  })
+                  ball = new Konva.Circle({
+                     x: -50,
+                     y: y_counter,
+                     radius: 5,
+                     fill: randomC
+                  });
+                  ballLayer.add(ball);
+                  
+                  y_counter = y_counter > (MAX_SIZE * 100) ? 0 : y_counter + 100;         
+                  
+                  //mapOfAddress[ip] = node;
+                  if(listOfAddress.length > MAX_SIZE) {
+                     listOfAddress.shift();
+                     var removeNode = listOfNodes.shift();
+                     removeNode.destroy();
+                     
+                     listOfAddress.push(ip);
+                     listOfNodes.push(node);
+                     layer.add(node)
+                  } else {
+                     listOfAddress.push(ip);
+                     listOfNodes.push(node);
+                     layer.add(node)
+                  }
+               } else {
+                  var node = listOfNodes[nodeIndex];
+                  ball = new Konva.Circle({
+                     x: -50,
+                     y: node.y(),
+                     radius: 5,
+                     fill: node.fill()
+                  });
+                  ballLayer.add(ball);
+                  /*var radius = node.radius();
+                  if(radius < 50) {
+                     var tween = new Konva.Tween({
+                          node: node,
+                          duration: 0.05,
+                          radius: radius + 10
+                     });
+                     tween.play();
+                  }*/
+                  var size = node.fontSize();
+                  if(size < 20) {
+                     var tween = new Konva.Tween({
+                        node: node,
+                        duration: 0.1,
+                        fontSize: size + 10
+                     })
+                     tween.play();
+                  }
+               }
+               
+               var urlIndex = -1
+               //if(!(url in listOfUrl)) {
+               if((urlIndex = listOfUrl.indexOf(url)) == -1) {
+                  console.log(url);
+                  //listOfUrl[url] = 1
+                  x_tar = stage.getWidth()/2;
+                  y_tar = y_counter2;
+                  
+                  var urlText = new Konva.Text({
+                     x: x_tar,
+                     y: y_tar,
+                     text: url,
+                     fontSize: 13,
+                     fontFamily: 'Calibri',
+                     fill: randomColor({
+                        luminosity: 'dark'
+                     })
+                  })
+                  var ballTween = new Konva.Tween({
+                     node: ball,
+                     x: x_tar,
+                     y: y_tar,
+                     duration: 1,
+                     onFinish: function() {
+                        ball.destroy();
+                     }
+                  })
+                  
+                  y_counter2 = y_counter2 > (20 * MAX_SIZE2) ? 0 : y_counter2 + 20;
+                  if(listOfUrl.length > MAX_SIZE2) {
+                     listOfUrl.shift();
+                     var removeUrl = listOfUrlNodes.shift();
+                     removeUrl.destroy();
+                     
+                     listOfUrl.push(url);
+                     listOfUrlNodes.push(urlText);
+                     layer.add(urlText)
+                  } else {
+                     listOfUrl.push(url);
+                     listOfUrlNodes.push(urlText);
+                     layer.add(urlText)
+                  }
+               } else {
+//                  listOfUrl[url]++;
+               }
+               
+               ballTween.play();
+               layer.draw();
+               urlLayer.draw();               
+               
+               //Time to Shoot!
+               /*var ball = new Konva.Circle({
+                  x: x_pos + 100,
+                  y: y_pos + 25,
+                  radius: 5,
+                  fill: color
+               });
+               ballLayer.add(ball)
+               
+               layer.draw();
+               urlLayer.draw();
+               ballLayer.draw();
+               
+               var ballTween = new Konva.Tween({
+                  node: ball,
+                  x: x_tar,
+                  y: y_tar,
+                  duration: 0.5,
+                  onFinish: function() {
+                     ball.destroy();
+                  }
+               })
+               ballTween.play();*/
+            } else {
+               clearInterval(intervalID);
+            }            
+         });
+      });
+   }
+   
+   function getRandomArbitrary(min, max) {
+      return Math.random() * (max - min) + min;
    }
 </script>
 

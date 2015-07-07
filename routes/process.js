@@ -3,6 +3,7 @@ var S = require('string');
 var lineReader = require('line-reader');
 var fs = require('fs');
 var appRoot = require('app-root-path');
+var async = require('async');
 var router = express.Router();
 
 var logDirectory = appRoot + '/logs/';
@@ -32,34 +33,69 @@ router.get('/log/:file', function(req, res, next) {
 }); 
 
 /* Returns the subsequent line in the log file. */
-router.get('/next', function(req, res, next) {
+router.get('/next/:number', function(req, res, next) {
    filePath = logDirectory + '/' + req.params.file;
+   numberOfLines = req.params.number || 1;
    filePosition = req.session.filePosition;
    filePath = req.session.filePath;
    bufferStr = req.session.bufferStr;
    
-   var pattern = /^([0-9.]+)\s([w.-]+)\s([w.-]+)\s\[(.+)\]\s"((?:[^"]|")+?)"\s(\d{3})\s(\d+|(.+?))\s"([^"]+|(.+?))"\s"([^"]+|(.+?))"$/
+   var n = parseInt(numberOfLines);
+   var pattern = /^([0-9.]+)\s([w.-]+)\s([w.-]+)\s\[(.+)\]\s"((?:[^"]|")+?)"\s(\d{3})\s(\d+|(.+?))\s"([^"]+|(.+?))"\s"([^"]*|(.+?))"$/
    
    if(filePosition != undefined && filePath != undefined && filePosition > 0) {
       lineReader.open(filePath, function(reader) {
-         if(reader.hasNextLine()) {
-            reader.nextLine(function(line) {
-               req.session.filePosition = reader.getFilePosition();
-               req.session.bufferStr = reader.getBufferStr();
-               
-               var result = pattern.exec(line);
-               
-               var reply = {
-                  'status': true,
-                  'ip': result[1],
-                  'date': result[4].replace(':', ' ', 1),
-                  'request': result[5],
-                  'status': result[6],
-                  'agent': result[11] 
+         var outputBuffer = [];
+         var testLine = '';
+         var counter = 0;
+         var flag = 0;
+         
+         async.whilst(
+            function() { return counter++ < n },
+            function(callback) {
+               if(reader.hasNextLine()) {
+                  reader.nextLine(function(line) {
+//                     console.log(counter);
+                     req.session.filePosition = reader.getFilePosition();
+                     req.session.bufferStr = reader.getBufferStr();
+
+                     var result = pattern.exec(line);
+                     
+                     if(result != null && result.length < 11) callback();
+                     //console.log(result);
+                     
+                     try {
+                        var reply = {
+                           'status': true,
+                           'ip': result[1],
+                           'date': result[4].replace(':', ' ', 1),
+                           'request': result[5].replace(/(GET|POST|HEAD)/, '').replace(/\sHTTP\/1\.[0-1]/, ''),
+                           'statusCode': result[6],
+                           'agent': result[11] 
+                        }   
+                     } catch(err) {
+                        console.log("Line Error: " + line);
+                        console.log(err);
+                        counter = n;
+                     }
+                     
+                     outputBuffer.push(reply);                     
+                     callback();
+                  });
+               } else {
+                  flag = 1;
+                  callback();
                }
-               res.json(reply);
-            });
-         }
+            },
+            function(err) {
+               reader.close();
+               if(flag === 1)
+                  res.json([{status: false}]);
+               else
+                  res.json(outputBuffer);
+            }
+         );
+         
       }, filePosition, '\n', 'utf-8', 1024, bufferStr);      
    } else {
       res.json({ status: false });
