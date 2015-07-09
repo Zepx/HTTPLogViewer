@@ -1,9 +1,9 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var width = window.innerWidth;
 var height = window.innerHeight;
-var color = randomColor();
 var y_counter = 0;
 var y_counter2 = 0;
+var stoppedButtonPressed = false;
 
 var stage = new Konva.Stage({
   container: 'container',
@@ -14,41 +14,34 @@ var stage = new Konva.Stage({
 var layer = new Konva.Layer();
 var urlLayer = new Konva.Layer();
 var ballLayer = new Konva.Layer();
-stage.add(urlLayer);
+var statistics = new Konva.Layer();
 stage.add(layer);
+stage.add(urlLayer);
 stage.add(ballLayer);
+stage.add(statistics);
 
-/*var rect = new Konva.Rect({
-  x: stage.getWidth() / 2,
-  y: stage.getHeight() / 2,
-  fill: '#BF4E4E',
-  stroke: 'black',
-  strokeWidth: 2,
-  width: 100,
-  height: 25
-});*/
-
-//layer.add(rect);
-//stage.add(layer);
-
-var amplitude = 350;
-var period = 2000;
-// in ms
 var centerX = stage.getWidth() / 2;
 
-var anim = new Konva.Animation(function(frame) {
-  rect.setX(amplitude * Math.sin(frame.time * 2 * Math.PI / period) + centerX);
-}, layer);
+var MAX_IP = 5;
+var MAX_URL = 30;
+var ADDRESS_Y_SPACING = 100;
+var URL_Y_SPACING = 20;
 
-//anim.start();
-var MAX_SIZE = 5;
-var MAX_SIZE2 = 30;
-var intervalID;
-var mapOfAddress = {};
-var listOfUrl = [];
-var listOfUrlNodes = [];
-var listOfAddress = [];
-var listOfNodes = [];
+var timeoutID;
+var addressBuffer = new CircularBuffer(MAX_IP);
+
+var indexOfAddress = [];
+var addressNodeBufferList = [];
+//var listOfNodes = [];
+
+var queueOfAddress = [];
+var queueOfAddressNodes = [];
+var queueOfUrl = [];
+var queueOfUrlNodes = [];
+
+//Preparatory Nodes
+var timeText = null;
+var allAddress = {};
 
 $(document).ready(function() {
    $.ajax( {
@@ -77,15 +70,188 @@ $(document).ready(function() {
    $('#startAutoButton').click(function() {
       $(this).hide();
       $("#stopAutoButton").show();
-      intervalID = window.setInterval(fetchNextLine, 2000);
+      //intervalID = window.setInterval(fetchNextLine, 2000);
+      timeoutID = window.setTimeout(fetchNextLine2(), 1000);
+      stoppedButtonPressed = false;
    });
 
    $('#stopAutoButton').click(function() {
       $(this).hide();
       $("#startAutoButton").show();
-      clearInterval(intervalID);
+      stoppedButtonPressed = true;
    });
 });
+
+var doneAnimation = false;
+function fetchNextLine2() {
+   $.ajax( {
+      url: 'process/next/25'
+   }).done(function(data) {
+//      listOfAddress = Array.apply(null, urlNodeBufferList).map(Number.prototype.valueOf,0);
+      
+      for(i = 0; i < MAX_IP; i++) {
+         indexOfAddress.push(i);
+      }
+      
+      //When timeline completes, move on to the next batch call
+      var tl = new TimelineLite({
+         onComplete: function() {
+            if(doneAnimation && !stoppedButtonPressed) {
+               doneAnimation = false;
+               timeoutID = window.setTimeout(fetchNextLine2(), 1000);
+            }
+         }
+      });
+      
+      //sub timeline
+      var ipTimeline = [];
+      for(i = 0; i < MAX_IP; i++) {
+         ipTimeline[i] = new TimelineLite();
+      }
+      
+      var ballTl = new TimelineLite();
+      
+      data.every(function(d) {
+         if(d.status === false) { 
+            doneAnimation = true;
+            return false;
+         }
+         
+         //Reposition IPs in the Buffer if there are more than IPs that are waiting
+         /*if(queueOfAddressNodes.length >= MAX_IP ) {
+            queueOfAddress.shift();
+            var removalNode = queueOfAddressNodes.shift();
+            urlNodeBufferList[urlNodeBufferList.indexOf(removalNode)] = 0;
+            
+            tl.to(removalNode, 0.2, {
+               konva: { x: -200 },
+               onComplete: function() { removalNode.destroy(); },
+            })
+            
+            //Shift nodes
+            queueOfAddressNodes.forEach(function(e, i) {
+               tl.to(e, 0.2, { konva: { y: i * ADDRESS_Y_SPACING } });
+            });
+         }*/
+         
+         //Reposition URLs in the Buffer if there are more than MAX_URL waiting
+         /*if(queueOfUrlNodes.length >= MAX_URL ) {
+            //listOfAddress.shift();
+            queueOfUrl.shift();
+            var removalUrlNode = queueOfUrlNodes.shift();
+            tl.to(removalUrlNode, 0.5, {
+               konva: { x: stage.getWidth() + 100 },
+               onComplete: function() { removalUrlNode.destroy(); },
+            }, 'urltext')
+            
+            //Shift nodes
+            queueOfUrlNodes.forEach(function(e, i) {
+               tl.to(e, 1, { konva: { y: i * URL_Y_SPACING }}, 'urltext', '+=0.2');
+            });
+            //tl.delay(2);
+         }*/
+         
+         //Variables
+         var ip = d.ip;
+         var url = d.request;
+         var code = d.statusCode;
+         var randomC = randomColor({luminosity: 'light'});
+         var nodeIndex = -1;
+         var urlIndex = -1
+         var ball = null;
+         
+         //IP Addressses
+         addressBuffer.entries().forEach(function(e, i) {
+            if(e == ip)
+               nodeIndex = i;
+         })
+         
+         nodeIndex = nodeIndex == -1 ? 0 : nodeIndex;
+         var node = new Konva.Text({
+            x: 25,
+            y: nodeIndex * ADDRESS_Y_SPACING,
+            text: ip,
+            fontSize: 13,
+            fill: randomC
+         });
+         layer.add(node);
+         tl.from(node, 1, { konva: { opacity: 0 }});
+         addressBuffer.add(Z)
+         
+         
+         
+         if((nodeIndex = ipCache.getIfPresent(nodeIndex)) == null) {
+            
+            
+            
+            
+         } else {
+            var node = urlNodeBufferList[nodeIndex];
+            
+            if(node.fontSize() < 20) {
+               tl.to(node, 1, {
+                  konva: {
+                     fontSize: node.fontSize() + 10
+                  }
+               }, 0);
+            }            
+         }
+         
+         /*ball = new Konva.Circle({
+            x: 150,
+            y: nodeIndex * ADDRESS_Y_SPACING,
+            radius: 5,
+            fill: queueOfAddressNodes[nodeIndex].fill()
+         });*/
+         
+         //URL Requests
+         /*var urlNode = null;
+         if((urlIndex = queueOfUrl.indexOf(url)) == -1) {
+            var urlColor = randomColor({ luminosity: 'light' })
+            urlIndex = queueOfUrl.length;
+            
+            urlNode = new Konva.Text({
+               x: stage.getWidth()/2,
+               y: urlIndex * URL_Y_SPACING,
+               text: url,
+               fontSize: 13,
+               fontFamily: 'Calibri',
+               fill: urlColor
+            })
+            
+            urlLayer.add(urlNode);
+            tl.from(urlNode, 0.2, { konva: { opacity: 0 }}, "urls").play();
+            queueOfUrl.push(url);
+            queueOfUrlNodes.push(urlNode);
+         } else {
+            var urlNode = queueOfUrlNodes[urlIndex];
+         }
+         
+         ballLayer.add(ball);
+         tl.to(ball, getRandomArbitrary(0.1, 2), {
+            konva: {
+               x: urlNode.x(),
+               y: urlNode.y() + 5
+            }
+         }, "urls", "+=0.5").to(ball, getRandomArbitrary(0.1, 2), {
+            konva: {
+               x: -10,
+               y: ball.y()
+            },
+            onComplete: function() {
+               ball.destroy();
+            }
+         }, "returnBalls"); */
+         
+         
+         
+         tl.play();
+         return true;
+      });      
+      doneAnimation = true;
+      
+   })
+}
 
 function fetchNextLine() {
    $.ajax( {
@@ -93,20 +259,24 @@ function fetchNextLine() {
    }).done(function(data) {
       data.forEach(function(d) {
          if(d.status === true) {
+            var code = d.statusCode;
             var ip = d.ip;
             var url = d.request;
             var x_pos = -1;
             var y_pos = -1;
             var x_tar = -1;
             var y_tar = -1;
-            var randomC = randomColor({luminosity: 'dark'});
+            var randomC = randomColor({luminosity: 'light'});
             var ball = null;
-            var ball2 = null;
             var ballTween = null;
-            var ballTween2 = null;
+            var timeNow = d.date;
 
+            if(timeText != null)
+               statistics.add(timeText).draw();
+            
             var nodeIndex = -1;
             if((nodeIndex = listOfAddress.indexOf(ip)) == -1) {
+               allAddress[ip] = 1;
                x_pos = 25;
                y_pos = y_counter;
 
@@ -124,60 +294,42 @@ function fetchNextLine() {
                   fill: randomC
                });
 
-               y_counter = y_counter > (MAX_SIZE * 100) ? 0 : y_counter + 100;         
+               y_counter = y_counter >= (MAX_SIZE * 100) ? 0 : y_counter + 100;         
 
-               if(listOfAddress.length > MAX_SIZE) {
-                  listOfAddress.shift();
+               if(listOfAddress.length >= MAX_SIZE) {
+                  listOfAddress.shift();                  
                   var removeNode = listOfNodes.shift();
-                  new Konva.Tween({
-                     node: removeNode,
-                     x: -10,
-                     duration: 0.2,
-                     onFinish: function() {
-                        removeNode.destroy();
-                        layer.add(node)
-
-                        new Konva.Tween({
-                           node: node,
-                           scale: 1,
-                           duration: 0.2
-                        }).play();
-                     }
-                  }).play();
-
+                  removeNode.destroy();
+                  layer.add(node);                  
                   listOfAddress.push(ip);
                   listOfNodes.push(node);
-
                } else {
                   listOfAddress.push(ip);
                   listOfNodes.push(node);
                   layer.add(node)
                }
             } else {
+               allAddress[ip]++;
                var node = listOfNodes[nodeIndex];
                ball = new Konva.Circle({
                   x: 150,
-                  y: node.y(),
+                  y: node.y() + 15,
                   radius: 5,
                   fill: node.fill()
                });
                var size = node.fontSize();
                if(size < 20) {
-                  var tween = new Konva.Tween({
-                     node: node,
-                     duration: 1,
-                     fontSize: size + 10
-                  })
-                  tween.play();
+                  TweenLite.to(node, 1, {
+                     konva: {
+                        fontSize: size + 10
+                     }                        
+                  });
                }
             }
 
             var urlIndex = -1
-            //if(!(url in listOfUrl)) {
             if((urlIndex = listOfUrl.indexOf(url)) == -1) {
-               var urlcolor = randomColor({ luminosity: 'dark' })
-               console.log(url);
-               //listOfUrl[url] = 1
+               var urlcolor = randomColor({ luminosity: 'light' })
                x_tar = stage.getWidth()/2;
                y_tar = y_counter2;
 
@@ -188,57 +340,61 @@ function fetchNextLine() {
                   fontSize: 13,
                   fontFamily: 'Calibri',
                   fill: urlcolor
+               });
+               
+               var statusCode = new Konva.Text({
+                  x: x_tar - 20,
+                  y: y_tar - 20,
+                  text: code,
+                  fontSize: 10,
+                  fontFamily: 'Courier',
+                  fill: 'yellow'
                })
-
-               ball2 = new Konva.Circle({
-                  x: x_tar,
-                  y: y_tar,
-                  radius: 5,
-                  fill: ball.fill()
-               });
-
-               ballTween2 = new Konva.Tween({
-                  node: ball2,
-                  x: -10,
-                  y: getRandomArbitrary(0, stage.getHeight()),
-                  duration: getRandomArbitrary(0.1, 2),
-                  onFinish: function() {
-                     ball2.destroy();                              
-                  }
-               });
 
                ballLayer.add(ball);
-               ballTween = new Konva.Tween({
-                  node: ball,
-                  x: x_tar,
-                  y: y_tar + 5,
-                  duration: getRandomArbitrary(0.1, 2),
-                  onFinish: function() {
-                     ball.destroy();
-                     ballLayer.add(ball2);
-                     ballTween2.play();
-                  }
-               })
-               ballTween.play();                  
-
-               y_counter2 = y_counter2 > (20 * MAX_SIZE2) ? 0 : y_counter2 + 20;
-               if(listOfUrl.length > MAX_SIZE2) {
+               
+               var tl = new TimelineLite();
+               tl.to(ball, getRandomArbitrary(0.1, 2), {
+                     konva: {
+                        x: x_tar,
+                        y: y_tar + 5
+                     },
+                     onComplete: function() {
+                        urlLayer.add(statusCode).draw();
+                        TweenLite.to(statusCode, 1, {
+                           opacity: 0,
+                           onComplete: function() {
+                              statusCode.destroy();
+                           }
+                        })
+                     }
+                  }).to(ball, getRandomArbitrary(0.1, 2), {
+                     konva: {
+                        x: -10,
+                        y: ball.y()
+                     },
+                     onComplete: function() {
+                        ball.destroy();
+                     }
+                  });
+               
+               y_counter2 = y_counter2 >= (20 * MAX_SIZE2) ? 0 : y_counter2 + 20;
+               if(listOfUrl.length >= MAX_SIZE2) {                  
                   listOfUrl.shift();
                   var removeUrl = listOfUrlNodes.shift();
-                  new Konva.Tween({
-                     node: removeUrl,
-                     x: stage.getWidth() + 100,
-                     duration: 0.2,
-                     onFinish: function() {
-                        removeUrl.destroy();
-                        layer.add(urlText)
-                        new Konva.Tween({
-                           node: urlText,
-                           scale: 1,
-                           duration: 0.2
-                        }).play();
+                  
+                  var tl = new TimelineLite();
+                  tl.to(removeUrl, 0.3, {
+                     konva: {
+                        x: stage.getWidth() + 100,                        
                      }
-                  }).play();                     
+                  }).eventCallback('onComplete', function() {
+                     removeUrl.destroy();
+                     layer.add(urlText);
+                     TweenLite.to(urlText, 1, {
+                        opacity: 1
+                     });
+                  });
 
                   listOfUrl.push(url);
                   listOfUrlNodes.push(urlText);
@@ -247,9 +403,22 @@ function fetchNextLine() {
                   listOfUrlNodes.push(urlText);
                   layer.add(urlText)
                }
+            }
+            
+            //Statistics
+            var x_start = 25;
+            var y_start = MAX_SIZE2 * 20 + 50;
+            if(timeText == null) {
+               timeText = new Konva.Text({
+                  x: x_start,
+                  y: y_start,
+                  text: timeNow,
+                  fill: 'white'
+               });
             } else {
-//                  listOfUrl[url]++;
+               timeText.text(timeNow);
             }            
+            
          } else {
             clearInterval(intervalID);
          }            
