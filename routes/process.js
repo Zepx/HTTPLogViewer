@@ -69,7 +69,7 @@ router.get('/next/:number', function(req, res, next) {
                            'status': true,
                            'ip': result[1],
                            'date': result[4].replace(':', ' ', 1),
-                           'request': result[5].replace(/(GET|POST|HEAD)/, '').replace(/\sHTTP\/1\.[0-1]/, ''),
+                           'request': result[5].replace(/(GET|POST|HEAD)/, '').replace(/\sHTTP\/1\.[0-1]/, '').trim(),
                            'statusCode': result[6],
                            'agent': result[11] 
                         }   

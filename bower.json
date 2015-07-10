@@ -21,6 +21,6 @@
     "randomColor": "git@github.com:Zepx/randomColor.git#~0.3.1",
     "greensock-plugin": "git@github.com:konvajs/greensock-plugin.git",
     "gsap": "~1.17.0",
-    "js-lru": "git@github.com:hilbix/js-lru.git"
+    "js-lru": "git@github.com:hilbix/js-lru.git#fixed-shift"
   }
 }
